@@ -31,9 +31,15 @@ def get_domain_and_server(req):
 
     if req is None:
         return None
+
     else:
-        server = req.headers['Server']
-        domain = fully_qualified_domain_name(req.url)
+
+        try:
+            server = req.headers['Server']
+            domain = fully_qualified_domain_name(req.url)
+        except KeyError:
+            server = 'N/A'
+            domain = fully_qualified_domain_name(req.url)
 
         return (domain, server)
 
