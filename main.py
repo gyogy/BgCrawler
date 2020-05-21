@@ -1,53 +1,51 @@
 import sys
-from project.db.db import (
-    Site, Queue, Base,
-    engine, Session, session_cm,
-    update_sites_table,
-    update_queue_table,
-    select_and_delete_first_from_queue,
-    get_queue_count
-)
-from utils import (
-    request,
-    get_domain_and_server,
-    get_external_links
-)
-
-Base.metadata.create_all(engine)
+from project.db.controller import DBController
+from project.crawler.controller import Crawler
+from project.db.setup import Domain, Queue, Base, engine
+from project.utils import *
 
 
-def check_site(site):
-    req = request(site)
-    dom_serv_tuple = get_domain_and_server(req)
-    print(dom_serv_tuple)
-
-    if dom_serv_tuple is None:
-        pass
-
-    elif update_sites_table(dom_serv_tuple):
-        print('Getting external links.')
-        ext_links = get_external_links(req)
-
-        if ext_links:
-            print('Adding links to queue')
-            update_queue_table(ext_links)
+def add_site_to_domains(crawler):
+    name = crawler.get_domain()
+    server = crawler.get_server()
+    time = crawler.get_time()
+    print(f'Adding {name} to Domains table')
+    dbc.update_domains(name=name, server=server, time=time)
 
 
-def process_queue():
-    while True:
-        rows = get_queue_count()
-        print(f'{rows} links in queue')
-        if rows == 0:
-            break
-        else:
-            site = select_and_delete_first_from_queue()
-            check_site(site)
+def add_ext_links_to_queue(crawler):
+    ext_links = crawler.get_external_links()
+    Qs = []
+
+    if not ext_links:
+        print(f'No external links found on {crawler.response.url}')
+    else:
+        urls = ext_links[::2]
+        times = ext_links[1::2]
+
+        for url, time in zip(urls, times):
+            Qs.append((Queue(url=url, collected_at=time, marked=False)))
+        dbc.update_q(Qs)
 
 
 if __name__ == '__main__':
-    choice = sys.argv[1]
 
-    if choice == 'queue':
-        process_queue()
+    Base.metadata.create_all(engine)
+    choice = sys.argv[1]
+    if choice.lower() == 'queue':
+        pass
     else:
-        check_site(choice)
+        url = url_normalizer(choice)
+        dbc = DBController()
+        c = Crawler(url)
+
+        if c.response is not None:
+            add_site_to_domains(c)
+            add_ext_links_to_queue(c)
+        else:
+            pass
+
+        # for link in elinks:
+        #     print(link)
+        #     q = Queue(url=link, collected_at='12:00', marked=False)
+        #     dbc.update_q(q)
